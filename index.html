@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIFA Work League</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0f0b; color: #fff;
+    min-height: 100vh; padding: 40px 16px;
+  }
+  h1 {
+    text-align: center; font-size: 24px; font-weight: 800;
+    margin-bottom: 4px; letter-spacing: -0.5px;
+  }
+  h1 span { color: #f5a623; }
+  .sub { text-align: center; font-size: 13px; color: rgba(255,255,255,0.35); margin-bottom: 28px; }
+
+  .refresh {
+    display: block; margin: 0 auto 28px;
+    background: #f5a623; color: #000; border: none;
+    padding: 9px 24px; border-radius: 7px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+  .refresh:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  table {
+    width: 100%; max-width: 500px; margin: 0 auto;
+    border-collapse: collapse;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px; overflow: hidden;
+  }
+  thead tr { background: rgba(255,255,255,0.05); }
+  th {
+    padding: 11px 16px; text-align: left;
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: rgba(255,255,255,0.3);
+  }
+  th.pts { text-align: right; }
+  td { padding: 13px 16px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 14px; }
+  td.pts { text-align: right; font-size: 18px; font-weight: 800; color: #f5a623; }
+  td.rank { font-weight: 800; font-size: 16px; color: rgba(255,255,255,0.25); width: 40px; }
+  tr:nth-child(1) td.rank { color: #f5c542; }
+  tr:nth-child(2) td.rank { color: #c0c0c0; }
+  tr:nth-child(3) td.rank { color: #cd7f32; }
+  a { color: #fff; text-decoration: none; }
+  a:hover { text-decoration: underline; color: #f5a623; }
+  .status { text-align: center; font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<h1>⚽ Work League <span>2026</span></h1>
+<p class="sub">FIFA Second Chance Bracket</p>
+<button class="refresh" id="btn" onclick="loadAll()">Load Scores</button>
+<table id="table" style="display:none">
+  <thead><tr><th>#</th><th>Player</th><th class="pts">Points</th></tr></thead>
+  <tbody id="tbody"></tbody>
+</table>
+<p class="status" id="status"></p>
+
+<script>
+// ── ADD YOUR PLAYERS HERE ──────────────────────────────────
+const PLAYERS = [
+  { name: "MOHROCCO", teamId: 5940179 },
+  { name: "Player 2",  teamId: 6504571 }
+];
+// ──────────────────────────────────────────────────────────
+
+function calcPoints(data) {
+  const rounds = data?.success?.knockoutStagePredictions;
+  if (!rounds) return 0;
+  let total = 0;
+  Object.values(rounds).forEach(matches =>
+    matches.forEach(m =>
+      (m.points || []).forEach(p => { total += p.points || 0; })
+    )
+  );
+  return total;
+}
+
+async function fetchPlayer(player) {
+  const url = `https://play.fifa.com/api/en/bracket-predictor/user/${player.teamId}/after-lockout-predictions`;
+  const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+  try {
+    const r = await fetch(proxy);
+    const data = await r.json();
+    return {
+      name: data?.success?.userName || player.name,
+      teamId: player.teamId,
+      points: calcPoints(data)
+    };
+  } catch(e) {
+    return { name: player.name, teamId: player.teamId, points: null };
+  }
+}
+
+async function loadAll() {
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+  document.getElementById('status').textContent = '';
+
+  const results = await Promise.all(PLAYERS.map(fetchPlayer));
+
+  results.sort((a, b) => (b.points ?? -1) - (a.points ?? -1));
+
+  const medals = ['🥇', '🥈', '🥉'];
+  document.getElementById('tbody').innerHTML = results.map((p, i) => {
+    const bracket = `https://play.fifa.com/bracket-predictor/en/another-brackets-second-chance/${p.teamId}`;
+    const rank = i < 3 ? medals[i] : i + 1;
+    const pts = p.points !== null ? p.points : '—';
+    return `<tr>
+      <td class="rank">${rank}</td>
+      <td><a href="${bracket}" target="_blank">${p.name}</a></td>
+      <td class="pts">${pts}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('table').style.display = 'table';
+  const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  document.getElementById('status').textContent = `Last updated ${now}`;
+  btn.disabled = false;
+  btn.textContent = '↻ Refresh';
+}
+</script>
+</body>
+</html>
